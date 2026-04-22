@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>DOZMA | 音乐人 & 设计师</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/SplitText.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { primary: '#FF6B00', secondary: '#FFD700', dark: '#151617', 'dark-light': '#1E1F21' },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 全局基础样式 */
+        .bg-glass { background: rgba(43, 45, 47, 0.8); backdrop-filter: blur(10px); }
+        .bg-glass-light { background: rgba(43, 45, 47, 0.7); backdrop-filter: blur(8px); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .lyrics-box {
+            font-family: 'Courier New', monospace;
+            background: rgba(0,0,0,0.4);
+            padding: 1rem;
+            border-radius: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.75rem;
+            line-height: 1.2;
+        }
+        .custom-player {
+            background: rgba(0,0,0,0.5);
+            border-radius: 2rem;
+            padding: 0.5rem 1rem;
+            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            backdrop-filter: blur(4px);
+        }
+        .player-btn {
+            background: #FF6B00;
+            color: #151617;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+        .player-btn:hover { transform: scale(1.05); background: #ff8533; }
+        .player-btn:active { transform: scale(0.95); }
+        .progress-container {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: #FF6B00;
+            border-radius: 2px;
+        }
+        .time-text {
+            font-size: 0.7rem;
+            color: #ccc;
+            font-family: monospace;
+            min-width: 80px;
+            text-align: center;
+        }
+        .global-player {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #000;
+            backdrop-filter: blur(8px);
+            border-radius: 2rem;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 1001;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid #FF6B00;
+        }
+        .global-player .song-name { font-size: 0.8rem; font-weight: 500; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+        .global-player .control-btn {
+            background: none; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;
+            width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .global-player .control-btn:hover {
+            background: rgba(255,107,0,0.2);
+            transform: scale(1.05);
+            color: #FF6B00;
+        }
+        .bio-card {
+            background: rgba(30,31,33,0.6);
+            backdrop-filter: blur(8px);
+            border-radius: 2rem;
+            padding: 2rem;
+            border: 1px solid rgba(255,107,0,0.2);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+        .bio-card:hover { border-color: rgba(255,107,0,0.6); transform: translateY(-4px); }
+        .bio-timeline { position: relative; padding-left: 1.5rem; }
+        .bio-timeline::before { content: ''; position: absolute; left: 0; top: 0.5rem; bottom: 0.5rem; width: 2px; background: linear-gradient(to bottom, #FF6B00, rgba(255,107,0,0.2)); }
+        .bio-item { position: relative; margin-bottom: 1.5rem; }
+        .bio-item::before { content: ''; position: absolute; left: -1.5rem; top: 0.4rem; width: 8px; height: 8px; background: #FF6B00; border-radius: 50%; }
+        .bio-year { font-size: 0.75rem; color: #FF6B00; letter-spacing: 1px; margin-bottom: 0.25rem; }
+        .bio-text { font-size: 0.85rem; line-height: 1.5; color: #ddd; }
+        @media (max-width: 768px) { .bio-card { padding: 1.5rem; } .bio-text { font-size: 0.75rem; } }
+
+        /* 火把照亮效果 */
+        .torch-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            pointer-events: none;
+            z-index: 1000;
+            transition: background 0.1s ease;
+        }
+        .torch-mask.active {
+            background: radial-gradient(circle 200px at var(--x, 50%) var(--y, 50%), 
+                transparent 0%, 
+                rgba(0,0,0,0.7) 100%);
+        }
+        .torch-mask.hidden-mode {
+            display: none;
+        }
+        body, .torch-mask {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" fill="none"/><polygon points="16,4 12,12 20,12" fill="%23FF6B00" /><rect x="14" y="12" width="4" height="10" fill="%238B5A2B"/><rect x="13" y="22" width="6" height="2" fill="%238B5A2B"/><circle cx="16" cy="10" r="2" fill="%23FFD700"/><rect x="15" y="8" width="2" height="2" fill="%23FF4500"/><rect x="17" y="9" width="1" height="1" fill="%23FF4500"/></svg>') 16 8, auto;
+        }
+        nav { z-index: 1001 !important; }
+        .global-player { z-index: 1001 !important; }
+        html { scroll-behavior: smooth; }
+
+        /* 平面作品悬停背景层 */
+        .hover-bg-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .hover-bg-layer.active {
+            opacity: 0.25;
+            filter: blur(8px);
+        }
+
+        /* 平面作品卡片 */
+        .artwork-card {
+            transition: transform 0.2s ease;
+            cursor: pointer;
+            width: 200px;
+            position: relative;
+            border-radius: 1rem;
+            overflow: hidden;
+            background: rgba(0,0,0,0.3);
+        }
+        .artwork-card:hover { transform: scale(1.02); }
+        @media (max-width: 640px) { .artwork-card { width: 160px; } }
+
+        /* 模态框 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(12px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0.2s, opacity 0.2s;
+        }
+        .modal.active { visibility: visible; opacity: 1; }
+        .modal-content {
+            max-width: 80vw;
+            max-height: 80vh;
+            position: relative;
+            background: rgba(30,31,33,0.9);
+            border-radius: 1.5rem;
+            padding: 1rem;
+            border: 1px solid rgba(255,107,0,0.3);
+            box-shadow: 0 20px 35px rgba(0,0,0,0.5);
+        }
+        .modal-content img { max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 1rem; }
+        .modal-info { text-align: center; margin-top: 1rem; padding: 0.5rem; }
+        .modal-info .cn { font-size: 1.25rem; font-weight: bold; color: #FF6B00; }
+        .modal-info .en { font-size: 0.9rem; color: #ccc; margin-top: 0.25rem; }
+        .modal-info .year { font-size: 0.8rem; color: #aaa; margin-top: 0.25rem; }
+        .modal-close {
+            position: absolute; top: -15px; right: -15px; width: 36px; height: 36px;
+            background: #FF6B00; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; cursor: pointer; font-size: 20px; color: #151617;
+            transition: transform 0.2s; border: none;
+        }
+        .modal-close:hover { transform: scale(1.1); }
+
+        /* 宝箱 */
+        .treasure-chest {
+            display: inline-block; position: relative; cursor: pointer; width: 60px; height: 50px;
+            margin: 60px auto 0; transition: transform 0.2s ease;
+        }
+        .treasure-chest:hover { animation: shake 0.5s ease-in-out; }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            50% { transform: translateX(3px); }
+            75% { transform: translateX(-2px); }
+            100% { transform: translateX(0); }
+        }
+        .chest-lid {
+            position: absolute; top: 0; left: 0; width: 100%; height: 20px;
+            background: #FF6B00; border-radius: 6px 6px 0 0; transition: transform 0.35s ease;
+            transform-origin: top center; z-index: 2; box-shadow: 0 2px 0 #2A2A2A;
+            border: 1px solid #1E1F21; border-bottom: none;
+        }
+        .chest-lid::before {
+            content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+            width: 16px; height: 6px; background: #FFD700; border-radius: 3px; box-shadow: 0 1px 0 #B8860B;
+        }
+        .chest-lid::after {
+            content: ''; position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+            width: 8px; height: 6px; background: #FFD700; border-radius: 3px;
+        }
+        .chest-body {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 30px;
+            background: #E65C00; border-radius: 0 0 6px 6px; z-index: 1;
+            box-shadow: inset 0 2px 0 #FF8C33, 0 0 0 2px #2A2A2A;
+            border: 1px solid #1E1F21; border-top: none;
+        }
+        .chest-body::before, .chest-body::after {
+            content: ''; position: absolute; width: 10px; height: 10px; background: #3A3A3A;
+            bottom: 4px; border-radius: 2px; box-shadow: 0 0 0 1px #555;
+        }
+        .chest-body::before { left: 5px; }
+        .chest-body::after { right: 5px; }
+        .treasure-chest.open .chest-lid { transform: rotateX(-120deg); }
+        .dog {
+            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+            width: 24px; height: 24px; background: #E65C00; z-index: 3; display: none;
+            pointer-events: none; animation: pop 0.2s ease-out; border-radius: 3px;
+            box-shadow: 0 0 0 2px #2A2A2A;
+        }
+        .dog::before, .dog::after {
+            content: ''; position: absolute; width: 8px; height: 8px; background: #B84C00;
+            top: -5px; border-radius: 50%; box-shadow: 0 0 0 1px #2A2A2A;
+        }
+        .dog::before { left: -1px; }
+        .dog::after { right: -1px; }
+        .dog .eye-left, .dog .eye-right {
+            position: absolute; width: 4px; height: 4px; background: #1E1F21; top: 6px; border-radius: 50%;
+        }
+        .dog .eye-left { left: 5px; }
+        .dog .eye-right { right: 5px; }
+        .dog .nose {
+            position: absolute; width: 5px; height: 4px; background: #1E1F21;
+            bottom: 5px; left: 50%; transform: translateX(-50%); border-radius: 2px;
+        }
+        .dog .tongue {
+            position: absolute; width: 4px; height: 4px; background: #CC3300;
+            bottom: 2px; left: 50%; transform: translateX(-50%); border-radius: 0 0 2px 2px;
+        }
+        @keyframes pop {
+            0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+            80% { transform: translateX(-50%) scale(1.1); }
+            100% { transform: translateX(-50%) scale(1); opacity: 1; }
+        }
+        .treasure-chest.open .dog { display: block; }
+        .heart {
+            position: fixed; font-size: 18px; pointer-events: none; z-index: 1010;
+            animation: floatUp 1s ease-out forwards; filter: drop-shadow(0 0 2px #FF6B00);
+            font-family: monospace; color: #FF6B00; text-shadow: 0 0 2px #CC6600;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.8); opacity: 1; }
+            80% { opacity: 1; }
+            100% { transform: translateY(-50px) scale(1.2); opacity: 0; }
+        }
+        .ending-text {
+            font-size: 1.125rem; letter-spacing: 0.05em; color: #ffffff; opacity: 0.8; transition: opacity 0.3s;
+        }
+        .ending-text:hover { opacity: 1; }
+
+        /* 火柴棒按钮 */
+        .matchstick {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-end;
+            gap: 12px;
+            cursor: pointer;
+            z-index: 1001;
+            transition: transform 0.2s;
+        }
+        .matchstick:hover .match-icon { transform: scale(1.05); }
+        .match-icon {
+            width: 48px;
+            height: 48px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="none"/><rect x="28" y="20" width="8" height="30" fill="%23D2B48C" stroke="%238B5A2B" stroke-width="2" rx="2"/><circle cx="32" cy="20" r="8" fill="%23B22222" stroke="%238B0000" stroke-width="2"/><circle cx="32" cy="18" r="4" fill="%23FF4500"/></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            transition: all 0.2s ease;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        .matchstick.lit .match-icon {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="none"/><rect x="28" y="20" width="8" height="30" fill="%23D2B48C" stroke="%238B5A2B" stroke-width="2" rx="2"/><circle cx="32" cy="20" r="10" fill="%23FF4500" stroke="%23FF6B00" stroke-width="2"/><circle cx="32" cy="18" r="6" fill="%23FFD700"/><circle cx="32" cy="16" r="3" fill="%23FFFF00"/></svg>');
+            animation: flameFlicker 0.5s infinite alternate;
+        }
+        @keyframes flameFlicker {
+            0% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.05); }
+        }
+        .fire-flame {
+            position: absolute;
+            bottom: 45px;
+            left: 24px;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 30px;
+            background: radial-gradient(ellipse at center, #FF6B00 0%, #FF4500 70%, transparent 100%);
+            border-radius: 50% 50% 20% 20%;
+            filter: blur(4px);
+            animation: flameRise 0.6s ease-out forwards;
+            pointer-events: none;
+            z-index: 1002;
+        }
+        @keyframes flameRise {
+            0% { opacity: 1; transform: translateX(-50%) scaleY(0.5); bottom: 45px; }
+            100% { opacity: 0; transform: translateX(-50%) scaleY(1.5); bottom: 85px; }
+        }
+        .matchstick-text {
+            font-size: 0.7rem;
+            color: #aaa;
+            background: rgba(0,0,0,0.5);
+            padding: 4px 10px;
+            border-radius: 20px;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+        .matchstick-text.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* 留言操作按钮行样式 */
+        .message-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .like-btn {
+            background: none;
+            border: none;
+            color: #FF6B00;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            transition: all 0.2s;
+        }
+        .like-btn:hover {
+            background: rgba(255,107,0,0.2);
+        }
+        .like-btn.liked {
+            color: #FFD700;
+        }
+        .like-count {
+            font-size: 12px;
+            color: #ccc;
+        }
+        .delete-msg-btn {
+            background: none;
+            border: none;
+            color: #FF6B00;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 20px;
+            transition: all 0.2s;
+        }
+        .delete-msg-btn:hover {
+            background: rgba(255,107,0,0.2);
+            color: #FF4500;
+        }
+        .admin-delete-btn {
+            background: none;
+            border: none;
+            color: #FF4500;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 20px;
+            transition: all 0.2s;
+        }
+        .admin-delete-btn:hover {
+            background: rgba(255,69,0,0.2);
+            color: #FF0000;
+        }
+        .message-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        /* 管理员按钮样式 */
+        .admin-toggle-footer {
+            text-align: center;
+            margin-top: 1rem;
+            padding-bottom: 1rem;
+        }
+        .admin-toggle-footer button {
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            opacity: 0.7;
+        }
+        .admin-toggle-footer button:hover {
+            opacity: 1;
+            color: #FF6B00;
+        }
+
+        /* 手机端提示栏 */
+        .mobile-banner {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            z-index: 2000;
+            border-left: 4px solid #FF6B00;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-size: 0.8rem;
+            color: #fff;
+        }
+        .mobile-banner .close-banner {
+            background: none;
+            border: none;
+            color: #FF6B00;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        @media (min-width: 768px) {
+            .mobile-banner {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark text-white font-sans antialiased overflow-x-hidden">
+
+    <!-- 悬停背景层 -->
+    <div id="hoverBgLayer" class="hover-bg-layer"></div>
+
+    <!-- 导航栏 -->
+    <nav id="navbar" class="fixed top-0 left-0 w-full transition-all duration-300 py-4" style="z-index: 1001;">
+        <div class="container mx-auto px-6 flex justify-between items-center">
+            <a href="#hero" class="text-2xl font-semibold tracking-tight">DOZMA</a>
+            <div class="hidden md:flex space-x-12">
+                <a href="#hero" class="hover:text-primary transition">首页</a>
+                <a href="#bio" class="hover:text-primary transition">简介</a>
+                <a href="#music" class="hover:text-primary transition">音乐作品</a>
+                <a href="#artworks" class="hover:text-primary transition">平面作品</a>
+                <a href="#community" class="hover:text-primary transition">留言板</a>
+            </div>
+            <button id="menu-toggle" class="md:hidden text-2xl"><i class="fa fa-bars"></i></button>
+        </div>
+        <div id="mobile-menu" class="hidden md:hidden bg-glass-light">
+            <div class="container mx-auto px-4 py-4 flex flex-col space-y-4">
+                <a href="#hero" class="hover:text-primary">首页</a>
+                <a href="#bio" class="hover:text-primary">简介</a>
+                <a href="#music" class="hover:text-primary">音乐作品</a>
+                <a href="#artworks" class="hover:text-primary">平面作品</a>
+                <a href="#community" class="hover:text-primary">留言板</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 英雄区域 -->
+    <section id="hero" class="relative min-h-screen flex items-center justify-center overflow-hidden">
+        <div class="absolute inset-0 z-0">
+            <img src="https://p11-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/c51d08e97294471b94a7f8bf6e8653a8.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=20260420140709163E9641C28025CF75EC&rrcfp=8a172a1a&x-expires=1777270029&x-signature=fZdEVEUK3gDG3%2FzosQLvCqVxsbU%3D" alt="背景" class="w-full h-full object-cover opacity-100">
+            <div class="absolute inset-0 bg-gradient-to-b from-dark/20 to-dark"></div>
+        </div>
+        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce"><a href="#bio" class="text-primary"><i class="fa fa-chevron-down"></i></a></div>
+    </section>
+
+    <!-- 个人简介模块 -->
+    <section id="bio" class="py-20 relative">
+        <div class="absolute inset-0 z-0 opacity-20">
+            <img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/ea74ebf0c5b742d0bbb5658087e3eaa5~tplv-a9rns2rl98-image.image?rcl=20250917111150E5475872AC1CC0D06872&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1760670764&x-signature=%2FDJwiGqhuYb54aeRJVE2GdKGi0Q%3D" alt="波形" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-b from-dark to-dark-light"></div>
+        </div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="max-w-4xl mx-auto">
+                <div class="bio-card">
+                    <div class="flex flex-col md:flex-row gap-8 items-start">
+                        <div class="md:w-1/3">
+                            <h3 class="text-3xl font-light tracking-wide">DOZMA</h3>
+                            <div class="w-12 h-0.5 bg-primary mt-3 mb-4"></div>
+                            <p class="text-gray-400 text-xs leading-relaxed">Music & Design Creator</p>
+                            <p class="text-gray-400 text-xs leading-relaxed mt-1">2434138975@qq.com</p>
+                        </div>
+                        <div class="md:w-2/3">
+                            <div class="bio-timeline">
+                                <div class="bio-item"><div class="bio-year">2004</div><div class="bio-text">Born in Guiyang, Guizhou Province.</div></div>
+                                <div class="bio-item"><div class="bio-year">2022</div><div class="bio-text">Admitted to Beijing Forestry University, majoring in Landscape Architecture.</div></div>
+                                <div class="bio-item"><div class="bio-year">2023</div><div class="bio-text">Started releasing original music as an independent campus musician, covering lyric writing, composition, recording, and mixing.</div></div>
+                                <div class="bio-item"><div class="bio-year">2024</div><div class="bio-text">Embarked on a new journey in graphic design and began building my own media platform, which continues to this day.</div></div>
+                                <div class="bio-item"><div class="bio-year">Now</div><div class="bio-text">Enjoy refining thoughts derived from daily life and capturing fleeting emotions through creations. Works often embody simplicity and a sense of spirituality.</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 音乐作品区域（完整） -->
+    <section id="music" class="py-20 relative">
+        <div class="absolute inset-0 z-0 opacity-20">
+            <img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/ea74ebf0c5b742d0bbb5658087e3eaa5~tplv-a9rns2rl98-image.image?rcl=20250917111150E5475872AC1CC0D06872&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1760670764&x-signature=%2FDJwiGqhuYb54aeRJVE2GdKGi0Q%3D" alt="波形" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-b from-dark to-dark-light"></div>
+        </div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-6xl font-semibold mb-6">音乐作品</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto">探索专辑与单曲，点击封面即可试听，点击 <i class="fa fa-book text-white mx-1"></i> 查看歌词、创作故事及在线播放器。</p>
+            </div>
+
+            <!-- 专辑滚动区 -->
+            <div class="mb-16">
+                <h3 class="text-2xl font-bold mb-6 flex items-center"><span class="w-8 h-0.5 bg-primary mr-2"></span>专辑</h3>
+                <div class="relative">
+                    <button id="albums-prev" class="absolute left-0 top-1/2 -translate-y-1/2 bg-dark/80 p-2 rounded-full z-10"><i class="fa fa-chevron-left"></i></button>
+                    <button id="albums-next" class="absolute right-0 top-1/2 -translate-y-1/2 bg-dark/80 p-2 rounded-full z-10"><i class="fa fa-chevron-right"></i></button>
+                    <div id="albums-container" class="flex gap-6 overflow-x-auto scrollbar-hide pb-6 snap-x snap-mandatory">
+                        <div class="min-w-[280px] snap-start group cursor-pointer" onclick="window.open('https://music.163.com/#/song?id=2729753104', '_blank')">
+                            <div class="rounded-lg overflow-hidden transform transition group-hover:scale-105"><img src="https://p11-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/5b3bbd58a17348d085d1651dc57e32cf.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=%2BDkgp30SVMxHl0JtJ%2Fff3099CaQ%3D" class="w-full aspect-square object-cover"></div>
+                            <h4 class="font-bold text-lg mt-3">贵阳会下雨</h4>
+                            <p class="text-gray-400">2025</p>
+                        </div>
+                        <div class="min-w-[280px] snap-start group cursor-pointer" onclick="window.open('https://music.163.com/#/song?id=2676009440', '_blank')">
+                            <div class="rounded-lg overflow-hidden transform transition group-hover:scale-105"><img src="https://p3-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/5e3e702f27244b63953aeceb026f481e.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=%2F0CXXYNvIyRyTqgrUNV1xbwqE60%3D" class="w-full aspect-square object-cover"></div>
+                            <h4 class="font-bold text-lg mt-3">想要和妥协</h4>
+                            <p class="text-gray-400">2025</p>
+                        </div>
+                        <div class="min-w-[280px] snap-start group cursor-pointer" onclick="window.open('https://music.163.com/#/song?id=3370152561', '_blank')">
+                            <div class="rounded-lg overflow-hidden transform transition group-hover:scale-105"><img src="https://p26-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/b3c59f7708ae481389d0cadf69725956.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=oOejQEVNECzi%2BT4GkRdPD%2BGR6B4%3D" class="w-full aspect-square object-cover"></div>
+                            <h4 class="font-bold text-lg mt-3">UNO</h4>
+                            <p class="text-gray-400">2026</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 热门单曲（完整） -->
+            <div>
+                <h3 class="text-2xl font-bold mb-6 flex items-center"><span class="w-8 h-0.5 bg-secondary mr-2"></span>热门单曲</h3>
+                <div class="space-y-5">
+                    <!-- 贵阳会下雨 -->
+                    <div class="bg-glass-light rounded-lg p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex gap-4 items-center flex-1 min-w-[180px]">
+                                <div class="w-12 h-12 rounded overflow-hidden flex-shrink-0"><img src="https://p11-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/5b3bbd58a17348d085d1651dc57e32cf.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=%2BDkgp30SVMxHl0JtJ%2Fff3099CaQ%3D" class="w-full h-full object-cover"></div>
+                                <div><h4 class="font-bold text-xl">贵阳会下雨</h4><p class="text-gray-400 text-sm">Single · 3:45</p></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <a href="https://music.163.com/#/song?id=2729753104" target="_blank" class="w-10 h-10 rounded-full bg-primary text-dark flex items-center justify-center hover:bg-opacity-80 transition"><i class="fa fa-music"></i></a>
+                                <button class="detail-toggle-btn w-10 h-10 rounded-full bg-dark-lighter border border-gray-600 text-gray-300 hover:text-primary transition" data-target="detail-1"><i class="fa fa-book"></i></button>
+                            </div>
+                        </div>
+                        <div id="detail-1" class="song-detail-panel hidden mt-3 bg-black/60 backdrop-blur-md rounded-2xl p-5 border border-white/10">
+                            <div class="grid md:grid-cols-2 gap-6">
+                                <div class="flex flex-col items-center"><img src="https://p11-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/5b3bbd58a17348d085d1651dc57e32cf.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=%2BDkgp30SVMxHl0JtJ%2Fff3099CaQ%3D" class="w-48 h-48 rounded-2xl shadow-2xl object-cover border-2 border-primary/30"></div>
+                                <div><h4 class="text-lg font-bold text-primary mb-2">创作简介</h4><p class="text-gray-200 text-sm leading-relaxed mb-4">HOLIDAY PRACTICE 6<br>送给总是在下雨的贵阳和起伏不定的心</p><h4 class="text-lg font-bold text-primary mb-2">完整歌词</h4><div class="lyrics-box text-gray-200">贵阳夏天总是不断下雨<br>I dont wanna play what u want me to<br>那些足迹是因为我在这<br>手里握着沾湿了的画笔<br>感情总是不敢断得彻底<br>回头望去只剩我在这里<br>告别下了车曾相交过的弧线<br>带着收获 the life future<br>I keep following to<br>躺在草坪看街边路灯变星空<br>夏天洒落雨点都低声溅心中<br>一到开学季行李箱太重了把天赋存家中<br>听好爱好只能作为缓冲<br>作品通过审核自己却不满意<br>有时欣赏自我但总伴随焦虑<br>向上梦想需要依靠金钱浇灌<br>上路的代价是将用前途作为交换<br>金樽空对月早就习惯影作伴<br>随着经历不再敢对未来带期盼<br>不去做梦他又能否成为盖茨比<br>努力能否填平所有差距问自己<br>选择逃避不切的现实叫软弱还是智理<br>千万个梦来自路上千万个你<br>古往今来谈论梦想人们大多叹气<br>反复的触动和打压像贵阳要下的雨<br>贵阳夏天总是不断下雨～<br>贵阳夏天总是不断下雨<br>I dont wanna play what u want me to<br>那些足迹是因为我在这<br>手里握着沾湿了的画笔<br>感情总是不敢断得彻底<br>回头望去只剩我在这里<br>收到太多建议直到难以做出决定<br>这算是收到指示还是收到考验<br>总过于贪心擅长端水平稳前进<br>一步一个脚印样样会样样不精<br>带着善意劝说有时也听不进<br>但也没勇气喊出那句我不信<br>I don't wanna play what you want me to<br>只是贵阳在不断下雨<br>这边的山海拔高准静止锋让它一直下雨<br>粘在记忆深处的画面里总在下雨天<br>我从贵阳来又从贵阳走。</div></div>
+                            </div>
+                            <div class="custom-player mt-4" data-song-url="https://music.163.com/song/media/outer/url?id=2729753104.mp3">
+                                <button class="player-btn play-pause-btn"><i class="fa fa-play"></i></button>
+                                <button class="player-btn stop-btn"><i class="fa fa-stop"></i></button>
+                                <div class="progress-container"><div class="progress-fill"></div></div>
+                                <span class="time-text">0:00 / 0:00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 想要和妥协 -->
+                    <div class="bg-glass-light rounded-lg p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex gap-4 items-center flex-1 min-w-[180px]">
+                                <div class="w-12 h-12 rounded overflow-hidden flex-shrink-0"><img src="https://p3-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/5e3e702f27244b63953aeceb026f481e.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=%2F0CXXYNvIyRyTqgrUNV1xbwqE60%3D" class="w-full h-full object-cover"></div>
+                                <div><h4 class="font-bold text-xl">想要和妥协</h4><p class="text-gray-400 text-sm">Single · 4:12</p></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <a href="https://music.163.com/#/song?id=2676009440" target="_blank" class="w-10 h-10 rounded-full bg-primary text-dark flex items-center justify-center hover:bg-opacity-80 transition"><i class="fa fa-music"></i></a>
+                                <button class="detail-toggle-btn w-10 h-10 rounded-full bg-dark-lighter border border-gray-600 text-gray-300 hover:text-primary transition" data-target="detail-2"><i class="fa fa-book"></i></button>
+                            </div>
+                        </div>
+                        <div id="detail-2" class="song-detail-panel hidden mt-3 bg-black/60 backdrop-blur-md rounded-2xl p-5 border border-white/10">
+                            <div class="grid md:grid-cols-2 gap-6">
+                                <div class="flex flex-col items-center"><img src="https://p3-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/5e3e702f27244b63953aeceb026f481e.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=%2F0CXXYNvIyRyTqgrUNV1xbwqE60%3D" class="w-48 h-48 rounded-2xl shadow-2xl object-cover border-2 border-primary/30"></div>
+                                <div><h4 class="text-lg font-bold text-primary mb-2">创作简介</h4><p class="text-gray-200 text-sm leading-relaxed mb-4">HOLIDAY PRACTICE 5<br>对抗荒诞同时去创造以后<br>相信会变好的除非你又</p><h4 class="text-lg font-bold text-primary mb-2">完整歌词</h4><div class="lyrics-box text-gray-200">你知道的<br>这个年纪说没迷茫的都是假的<br>选拔性的考试考得人都要傻了<br>有时坐在朋友副驾也想开辆小车<br>听说谁谁谁的梦想又被现实打了<br>“ go” everyone says but I don't know<br>花了五年才摘下自卑的咒<br>对抗荒诞同时去创造以后<br>相信会变好的除非你又<br>除非你又<br>想要和妥协<br>挣扎之中<br>始终挣扎<br>想要和妥协<br>跳过一个又一个洞<br>天上明月仍藏雾中<br>有时还能想起坐井的梦<br>所爱能否撑起生命之重<br>I keep moving<br>I can't stopping<br>找不到盔甲的波巴费特<br>能否接受这个或者那个<br>下次的项目又要我陪谁喝<br>学会看清这个社会规则<br>街上抓九个他她它都有不如愿<br>有人爱借酒把他年少梦实现<br>有人忙着赚钱和家人都不见<br>有人四处奔走只为让真相浮现<br>想要和妥协<br>挣扎之中<br>始终挣扎<br>想要和妥协<br>跳过一个又一个洞<br>天上明月仍藏雾中<br>有时还能想起坐井的梦<br>所爱能否撑起生命之重<br>I keep moving<br>I can't stopping<br>写一首《她捣毁了整个夜》 to Drasa<br>以现在这个速度进步还算快吗<br>把必要的经历想成真人快打<br>时间在向前对当下生活多点爱吧<br>想要满足所有人却忽视了自己<br>接受平凡人一生要面对的课题<br>想要和妥协<br>想要和妥协</div></div>
+                            </div>
+                            <div class="custom-player mt-4" data-song-url="https://music.163.com/song/media/outer/url?id=2676009440.mp3">
+                                <button class="player-btn play-pause-btn"><i class="fa fa-play"></i></button>
+                                <button class="player-btn stop-btn"><i class="fa fa-stop"></i></button>
+                                <div class="progress-container"><div class="progress-fill"></div></div>
+                                <span class="time-text">0:00 / 0:00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- UNO -->
+                    <div class="bg-glass-light rounded-lg p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex gap-4 items-center flex-1 min-w-[180px]">
+                                <div class="w-12 h-12 rounded overflow-hidden flex-shrink-0"><img src="https://p26-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/b3c59f7708ae481389d0cadf69725956.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=oOejQEVNECzi%2BT4GkRdPD%2BGR6B4%3D" class="w-full h-full object-cover"></div>
+                                <div><h4 class="font-bold text-xl">UNO</h4><p class="text-gray-400 text-sm">Single · 3:58</p></div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <a href="https://music.163.com/#/song?id=3370152561" target="_blank" class="w-10 h-10 rounded-full bg-primary text-dark flex items-center justify-center hover:bg-opacity-80 transition"><i class="fa fa-music"></i></a>
+                                <button class="detail-toggle-btn w-10 h-10 rounded-full bg-dark-lighter border border-gray-600 text-gray-300 hover:text-primary transition" data-target="detail-3"><i class="fa fa-book"></i></button>
+                            </div>
+                        </div>
+                        <div id="detail-3" class="song-detail-panel hidden mt-3 bg-black/60 backdrop-blur-md rounded-2xl p-5 border border-white/10">
+                            <div class="grid md:grid-cols-2 gap-6">
+                                <div class="flex flex-col items-center"><img src="https://p26-flow-imagex-download-sign.byteimg.com/tos-cn-i-a9rns2rl98/b3c59f7708ae481389d0cadf69725956.png~tplv-a9rns2rl98-24:720:720.png?lk3s=8e244e95&rcl=202604201606587FE28412548F13F40AA9&rrcfp=8a172a1a&x-expires=1777277218&x-signature=oOejQEVNECzi%2BT4GkRdPD%2BGR6B4%3D" class="w-48 h-48 rounded-2xl shadow-2xl object-cover border-2 border-primary/30"></div>
+                                <div><h4 class="text-lg font-bold text-primary mb-2">创作简介</h4><p class="text-gray-200 text-sm leading-relaxed mb-4">HOLIDAY PRACTICE 10<br>Who knows？</p><h4 class="text-lg font-bold text-primary mb-2">完整歌词</h4><div class="lyrics-box text-gray-200">（ who knows）<br>手上一堆<br>+2+4<br>我是否应该打出呢<br>反转禁止<br>是不想看你太早 uno<br>哪怕手牌<br>能斗地主也接着抽<br>仿佛心跳瞬间<br>就定格变永久<br>当我再次落入你的眼睛<br>是否看清我心头病<br>命运再次相遇那份确幸<br>不断痛苦压抑感情<br>害怕再次受伤我决定<br>习惯看淡得失命<br>下次往杯里加满冰<br>每逢说起笑叹都是运<br>（ who knows）<br>没想到能在太空遇见你<br>Grace对 Rocky说<br>释怀都是我装的<br>当我抽中反转禁止<br>能否重让时针倒走<br>uknow<br>（ who knows）<br>没说出口保留体面<br>借声波传达思念<br>站在月之暗面<br>却看你不见<br>心在妥协<br>眼睛在流泪<br>DtMF（我应该多拍些照片）<br>uknow<br>手上一堆<br>+2+4<br>我是否应该打出呢<br>反转禁止<br>是不想看你太早 uno<br>哪怕手牌<br>能斗地主也接着抽<br>仿佛心跳瞬间<br>就定格变永久<br>有时过于稳妥有时博大<br>有时过于内向有时鬼炸<br>有时勇敢过我也后怕<br>patapata the name of the dance<br>新手保护期送我一点运气<br>记口诀像背武林秘籍<br>总算鼓起勇气却又被包鸡<br>（ who knows）<br>太过戏剧<br>没说出口的爱意<br>为何我<br>提前患上分离焦虑<br>want some more<br>不如趁早学会珍惜<br>Who the winner is<br>当彼此陷入这场游戏<br>就像隔着玻璃<br>我们看见无法触及<br>保护机制把思绪抽离词不达意<br>当下的关系想你的资格都还锁在抽屉<br>有些人出现像礼物<br>短暂相遇是命运嘲弄还是眷顾<br>不敢奢求夜晚思绪遍布<br>如何为心动辩护<br>逆转时间的解法<br>珍惜珍惜我告诉自己<br>保护心太重少朋友多搭子<br>为何你钻进心里如此轻易<br>我明白缘分来两条线相交后就离开<br>新的那些痛苦愉快伴随你出现袭来<br>当 seb望向 mia成长的代价很明显<br>应该更坦然还是更勇敢看作棋牌<br>或许注定我们慢慢距离比远方更远<br>奥德赛时期学着把分别看淡减少期待<br>西西弗推石头<br>百年孤独爱情霍乱徘徊<br>before sunrise）</div></div>
+                            </div>
+                            <div class="custom-player mt-4" data-song-url="https://music.163.com/song/media/outer/url?id=3370152561.mp3">
+                                <button class="player-btn play-pause-btn"><i class="fa fa-play"></i></button>
+                                <button class="player-btn stop-btn"><i class="fa fa-stop"></i></button>
+                                <div class="progress-container"><div class="progress-fill"></div></div>
+                                <span class="time-text">0:00 / 0:00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 平面作品章节 -->
+    <section id="artworks" class="py-20 relative">
+        <div class="absolute inset-0 z-0 opacity-20">
+            <img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/ea74ebf0c5b742d0bbb5658087e3eaa5~tplv-a9rns2rl98-image.image?rcl=20250917111150E5475872AC1CC0D06872&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1760670764&x-signature=%2FDJwiGqhuYb54aeRJVE2GdKGi0Q%3D" alt="波形" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-b from-dark to-dark-light"></div>
+        </div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-6xl font-semibold mb-6">平面作品</h2>
+                <p class="text-gray-400 max-w-2xl mx-auto">设计 · 插画 · 视觉实验 — 点击图片查看作品信息</p>
+                <div class="flex flex-col items-center justify-center mt-8 space-y-3">
+                    <div class="flex flex-wrap justify-center gap-4">
+                        <a href="https://www.xiaohongshu.com/user/profile/63477a60000000001901dea7?xsec_token=ABex1CCfnLvAHTWZ2wggMDbpgC3gAYzQb-ik7V3eSvTgs%3D&xsec_source=pc_search" target="_blank" class="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-primary text-primary hover:bg-primary hover:text-dark transition">
+                            <i class="fa fa-heart-o"></i> 小红书主页
+                        </a>
+                        <a href="https://www.douyin.com/user/self/search/DOZMA?aid=4b066744-a950-47e9-a1aa-3b5b2aee948f&type=general" target="_blank" class="inline-flex items-center gap-2 px-6 py-2 rounded-full border border-primary text-primary hover:bg-primary hover:text-dark transition">
+                            <i class="fa fa-music"></i> 抖音主页
+                        </a>
+                    </div>
+                    <p class="text-gray-500 text-sm"><i class="fa fa-info-circle mr-1"></i> 点击按钮可跳转至创作者主页</p>
+                </div>
+            </div>
+            <div class="relative">
+                <button id="artworks-prev" class="absolute left-0 top-1/2 -translate-y-1/2 bg-dark/80 p-2 rounded-full z-10 hover:bg-primary/80 transition"><i class="fa fa-chevron-left"></i></button>
+                <button id="artworks-next" class="absolute right-0 top-1/2 -translate-y-1/2 bg-dark/80 p-2 rounded-full z-10 hover:bg-primary/80 transition"><i class="fa fa-chevron-right"></i></button>
+                <div id="artworks-container" class="flex gap-5 overflow-x-auto scrollbar-hide pb-6 snap-x snap-mandatory"></div>
+            </div>
+            <div class="text-center text-gray-500 text-sm mt-8">
+                <i class="fa fa-arrow-left mr-2"></i> 左右滑动浏览作品 <i class="fa fa-arrow-right ml-2"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- 模态框 -->
+    <div id="artworkModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-close" id="modalClose">&times;</div>
+            <img id="modalImg" src="" alt="">
+            <div class="modal-info">
+                <div class="cn" id="modalCn"></div>
+                <div class="en" id="modalEn"></div>
+                <div class="year" id="modalYear"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 留言板区域 -->
+    <section id="community" class="py-20 relative">
+        <div class="absolute inset-0 z-0 opacity-20"><img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/ea74ebf0c5b742d0bbb5658087e3eaa5~tplv-a9rns2rl98-image.image?rcl=20250917111150E5475872AC1CC0D06872&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1760670764&x-signature=%2FDJwiGqhuYb54aeRJVE2GdKGi0Q%3D" class="w-full h-full object-cover"><div class="absolute inset-0 bg-gradient-to-b from-dark to-dark-light"></div></div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl md:text-6xl font-semibold mb-4">留言板</h2>
+                <p class="text-gray-400">想给DOZMA说点什么:</p>
+            </div>
+            <div class="max-w-2xl mx-auto">
+                <div class="bg-glass-light p-6 rounded-lg mb-8">
+                    <form id="message-form" class="space-y-4">
+                        <input type="text" id="name" placeholder="你的姓名" class="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-primary" required>
+                        <textarea id="message" rows="3" placeholder="留言内容..." class="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-primary" required></textarea>
+                        <button type="submit" class="bg-primary text-dark font-bold px-6 py-2 rounded-full hover:opacity-80 transition">提交留言</button>
+                    </form>
+                </div>
+                <div id="messages-container" class="space-y-6"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 底部区域 -->
+    <div class="py-12 text-center" style="padding-bottom: 2rem;">
+        <div class="ending-text">Record something.</div>
+        <div class="treasure-chest" id="treasureChest">
+            <div class="chest-lid"></div>
+            <div class="chest-body"></div>
+            <div class="dog">
+                <div class="eye-left"></div>
+                <div class="eye-right"></div>
+                <div class="nose"></div>
+                <div class="tongue"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark border-t border-gray-800 py-12">
+        <div class="container mx-auto px-6 text-center text-gray-400">
+            <div class="flex justify-center space-x-6 mb-6">
+                <a href="#" class="hover:text-primary"><i class="fa fa-spotify text-xl"></i></a>
+                <a href="#" class="hover:text-primary"><i class="fa fa-apple text-xl"></i></a>
+                <a href="#" class="hover:text-primary"><i class="fa fa-youtube-play text-xl"></i></a>
+            </div>
+            <p>© 2026 DOZMA. 保留所有权利。</p>
+        </div>
+    </footer>
+
+    <!-- 管理员按钮 -->
+    <div class="admin-toggle-footer">
+        <button id="adminToggleBtn">管理员</button>
+    </div>
+
+    <!-- 全局悬浮播放器 -->
+    <div id="globalPlayer" class="global-player">
+        <button id="globalPrev" class="control-btn"><i class="fa fa-step-backward"></i></button>
+        <button id="globalPlayPause" class="control-btn"><i class="fa fa-play"></i></button>
+        <button id="globalNext" class="control-btn"><i class="fa fa-step-forward"></i></button>
+        <span id="globalSongName" class="song-name">未播放</span>
+    </div>
+
+    <!-- 火柴棒按钮 -->
+    <div class="matchstick" id="matchstickBtn">
+        <div class="match-icon"></div>
+        <div class="matchstick-text">点击火柴 - 切换全亮模式</div>
+    </div>
+
+    <!-- 全站火把遮罩层 -->
+    <div id="torchMask" class="torch-mask"></div>
+
+    <!-- 手机端提示栏 -->
+    <div id="mobileBanner" class="mobile-banner">
+        <span>💡 提示：本网站为电脑端设计，火把照亮等特效需要鼠标操作。建议使用电脑访问以获得完整体验。</span>
+        <button id="closeBanner" class="close-banner">✕</button>
+    </div>
+
+    <script>
+        (function() {
+            // ========== 平面作品数据（13张完整） ==========
+            const artworks = [
+                { cn: "元旦海报", en: "New Year's Day", year: "2026", imageUrl: "https://i.ibb.co/84bP1mVG/image.png" },
+                { cn: "赛车主题海报", en: "Drifting", year: "2025", imageUrl: "https://i.ibb.co/FbNrhZQF/image.png" },
+                { cn: "不仅是队长", en: "Not Only Captain", year: "2025", imageUrl: "https://i.ibb.co/ddhppvP/image.png" },
+                { cn: "鬼岛决战", en: "Battle of the Ghost Island", year: "2025", imageUrl: "https://i.ibb.co/xKr4TJB0/vs-3.png" },
+                { cn: "我们学会的第一个词", en: "The First Word We Learnt", year: "2025", imageUrl: "https://i.ibb.co/7x7hh8f3/image.png" },
+                { cn: "相交", en: "Intersection", year: "2026", imageUrl: "https://i.ibb.co/YFbjBfZn/image.png" },
+                { cn: "挽救计划", en: "Project Hail Mary", year: "2026", imageUrl: "https://i.ibb.co/WWPPBbRq/image.png" },
+                { cn: "亚伯之恋", en: "Abel's Love", year: "2026", imageUrl: "https://i.ibb.co/DHnvKgdH/image.png" },
+                { cn: "蓝调旅程 · 一", en: "Blue Travel 1", year: "2025", imageUrl: "https://i.ibb.co/BKdQ3p60/blue.png" },
+                { cn: "自画像", en: "Self-portrait", year: "2025", imageUrl: "https://i.ibb.co/XrkcQ8ff/image.png" },
+                { cn: "秋 · 麦子", en: "Autumn · Wheat", year: "2025", imageUrl: "https://i.ibb.co/fdVjN5cp/image.png" },
+                { cn: "哈登", en: "Harden", year: "2024", imageUrl: "https://i.ibb.co/21Bd3Nkj/image.png" },
+                { cn: "保罗沃克速激七10周年纪念", en: "Paul Walker - Furious 7 10th Anniversary", year: "2025", imageUrl: "https://i.ibb.co/5WYrJpkj/image.png" }
+            ];
+
+            const container = document.getElementById('artworks-container');
+            if (container) {
+                container.innerHTML = '';
+                artworks.forEach(art => {
+                    const card = document.createElement('div');
+                    card.className = 'artwork-card snap-start cursor-pointer';
+                    card.style.width = '200px';
+                    card.style.flexShrink = '0';
+                    card.innerHTML = `
+                        <div class="rounded-lg overflow-hidden bg-dark-lighter">
+                            <img src="${art.imageUrl}" alt="${art.cn}" loading="lazy" class="w-full aspect-square object-cover">
+                        </div>
+                        <div class="mt-2 text-center">
+                            <h4 class="font-bold text-sm">${art.cn}</h4>
+                        </div>
+                    `;
+                    const hoverBgLayer = document.getElementById('hoverBgLayer');
+                    card.addEventListener('mouseenter', () => {
+                        hoverBgLayer.style.backgroundImage = `url(${art.imageUrl})`;
+                        hoverBgLayer.classList.add('active');
+                    });
+                    card.addEventListener('mouseleave', () => {
+                        hoverBgLayer.classList.remove('active');
+                        setTimeout(() => {
+                            if (!hoverBgLayer.classList.contains('active')) hoverBgLayer.style.backgroundImage = '';
+                        }, 200);
+                    });
+                    card.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const modal = document.getElementById('artworkModal');
+                        const modalImg = document.getElementById('modalImg');
+                        const modalCn = document.getElementById('modalCn');
+                        const modalEn = document.getElementById('modalEn');
+                        const modalYear = document.getElementById('modalYear');
+                        modalImg.src = art.imageUrl;
+                        modalCn.textContent = art.cn;
+                        modalEn.textContent = art.en;
+                        modalYear.textContent = `创作时间：${art.year}`;
+                        modal.classList.add('active');
+                    });
+                    container.appendChild(card);
+                });
+            }
+
+            // 模态框关闭
+            const modal = document.getElementById('artworkModal');
+            const modalClose = document.getElementById('modalClose');
+            function closeModal() { modal.classList.remove('active'); }
+            modalClose.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+            // 平面作品左右滚动
+            const artworksContainer = document.getElementById('artworks-container');
+            const artworksPrev = document.getElementById('artworks-prev');
+            const artworksNext = document.getElementById('artworks-next');
+            if (artworksPrev && artworksNext && artworksContainer) {
+                const newPrev = artworksPrev.cloneNode(true);
+                const newNext = artworksNext.cloneNode(true);
+                artworksPrev.parentNode.replaceChild(newPrev, artworksPrev);
+                artworksNext.parentNode.replaceChild(newNext, artworksNext);
+                newPrev.addEventListener('click', () => artworksContainer.scrollBy({ left: -220, behavior: 'smooth' }));
+                newNext.addEventListener('click', () => artworksContainer.scrollBy({ left: 220, behavior: 'smooth' }));
+            }
+
+            // ========== 火柴棒切换火把模式 + 8秒自动隐藏小字 ==========
+            const torchMask = document.getElementById('torchMask');
+            const matchstickBtn = document.getElementById('matchstickBtn');
+            const matchstickText = document.querySelector('.matchstick-text');
+            let torchActive = true;
+            let autoHideTimeout = null;
+
+            function setTorchMode(active) {
+                if (active) {
+                    torchMask.classList.remove('hidden-mode');
+                    torchMask.style.display = 'block';
+                    matchstickBtn.classList.remove('lit');
+                    if (matchstickText) matchstickText.classList.remove('hidden');
+                } else {
+                    torchMask.classList.add('hidden-mode');
+                    torchMask.style.display = 'none';
+                    matchstickBtn.classList.add('lit');
+                    if (matchstickText) matchstickText.classList.add('hidden');
+                    const flame = document.createElement('div');
+                    flame.className = 'fire-flame';
+                    matchstickBtn.appendChild(flame);
+                    setTimeout(() => flame.remove(), 600);
+                }
+                torchActive = active;
+                if (autoHideTimeout) clearTimeout(autoHideTimeout);
+                if (torchActive && matchstickText && !matchstickText.classList.contains('hidden')) {
+                    autoHideTimeout = setTimeout(() => {
+                        if (matchstickText && !matchstickText.classList.contains('hidden')) {
+                            matchstickText.classList.add('hidden');
+                        }
+                    }, 8000);
+                }
+            }
+
+            matchstickBtn.addEventListener('click', () => {
+                setTorchMode(!torchActive);
+            });
+            setTorchMode(true);
+
+            // 火把照亮效果
+            if (torchMask) {
+                document.addEventListener('mousemove', (e) => {
+                    if (torchActive && !torchMask.classList.contains('hidden-mode')) {
+                        torchMask.style.setProperty('--x', e.clientX + 'px');
+                        torchMask.style.setProperty('--y', e.clientY + 'px');
+                        torchMask.classList.add('active');
+                    }
+                });
+                document.addEventListener('mouseleave', () => {
+                    if (torchActive && !torchMask.classList.contains('hidden-mode')) {
+                        torchMask.classList.remove('active');
+                    }
+                });
+            }
+
+            // ========== 全局播放器 ==========
+            const playlist = [
+                { name: "贵阳会下雨", url: "https://music.163.com/song/media/outer/url?id=2729753104.mp3" },
+                { name: "想要和妥协", url: "https://music.163.com/song/media/outer/url?id=2676009440.mp3" },
+                { name: "UNO", url: "https://music.163.com/song/media/outer/url?id=3370152561.mp3" }
+            ];
+            const globalAudio = new Audio();
+            let globalCurrentIndex = Math.floor(Math.random() * playlist.length);
+            let globalIsPlaying = false;
+            let autoPlayAttempted = false;
+            const globalPlayPauseBtn = document.getElementById('globalPlayPause');
+            const globalPrevBtn = document.getElementById('globalPrev');
+            const globalNextBtn = document.getElementById('globalNext');
+            const globalSongNameSpan = document.getElementById('globalSongName');
+
+            function updateGlobalUI() {
+                globalSongNameSpan.textContent = playlist[globalCurrentIndex].name;
+                globalPlayPauseBtn.innerHTML = globalIsPlaying ? '<i class="fa fa-pause"></i>' : '<i class="fa fa-play"></i>';
+            }
+            function playGlobalCurrent() {
+                globalAudio.src = playlist[globalCurrentIndex].url;
+                globalAudio.play().then(() => { globalIsPlaying = true; updateGlobalUI(); }).catch(() => {});
+            }
+            function pauseGlobal() { globalAudio.pause(); globalIsPlaying = false; updateGlobalUI(); }
+            function toggleGlobalPlayPause() { if (globalIsPlaying) pauseGlobal(); else playGlobalCurrent(); }
+            function nextGlobalSong() { globalCurrentIndex = (globalCurrentIndex + 1) % playlist.length; if (globalIsPlaying) playGlobalCurrent(); else updateGlobalUI(); }
+            function prevGlobalSong() { globalCurrentIndex = (globalCurrentIndex - 1 + playlist.length) % playlist.length; if (globalIsPlaying) playGlobalCurrent(); else updateGlobalUI(); }
+            globalPlayPauseBtn.addEventListener('click', toggleGlobalPlayPause);
+            globalPrevBtn.addEventListener('click', prevGlobalSong);
+            globalNextBtn.addEventListener('click', nextGlobalSong);
+            globalAudio.addEventListener('ended', nextGlobalSong);
+            updateGlobalUI();
+            function tryAutoPlay() { if (autoPlayAttempted) return; autoPlayAttempted = true; globalAudio.src = playlist[globalCurrentIndex].url; globalAudio.play().catch(()=>{}); document.removeEventListener('click', tryAutoPlay); document.removeEventListener('touchstart', tryAutoPlay); }
+            document.addEventListener('click', tryAutoPlay);
+            document.addEventListener('touchstart', tryAutoPlay);
+            setTimeout(tryAutoPlay, 1000);
+
+            // ========== 留言板（点赞 + 普通删除 + 管理员删除权限） ==========
+            let visitorId = localStorage.getItem('visitorId');
+            if (!visitorId) {
+                visitorId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+                localStorage.setItem('visitorId', visitorId);
+            }
+
+            let isAdminMode = false;
+            const ADMIN_PASSWORD = 'dozma2026';
+
+            const adminFooterBtn = document.getElementById('adminToggleBtn');
+            const form = document.getElementById('message-form');
+            const msgContainer = document.getElementById('messages-container');
+
+            function loadMessages() {
+                const msgs = JSON.parse(localStorage.getItem('music_messages') || '[]');
+                if (msgContainer) {
+                    msgContainer.innerHTML = '';
+                    msgs.forEach(msg => {
+                        const div = document.createElement('div');
+                        div.className = 'bg-glass-light p-5 rounded-lg';
+                        const isAuthor = (msg.visitorId === visitorId);
+                        const likedByCurrent = (msg.likes && msg.likes.includes(visitorId)) ? true : false;
+                        const likeCount = msg.likes ? msg.likes.length : 0;
+                        let actionsHtml = `
+                            <button class="like-btn ${likedByCurrent ? 'liked' : ''}" data-id="${msg.id}">
+                                <i class="fa fa-thumbs-up"></i> <span class="like-count">${likeCount}</span>
+                            </button>
+                        `;
+                        if (isAuthor) {
+                            actionsHtml += `<button class="delete-msg-btn" data-id="${msg.id}"><i class="fa fa-trash-o"></i></button>`;
+                        }
+                        if (isAdminMode) {
+                            actionsHtml += `<button class="admin-delete-btn" data-id="${msg.id}"><i class="fa fa-trash"></i> 管理删</button>`;
+                        }
+                        div.innerHTML = `
+                            <div class="message-header">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">${escapeHtml(msg.name[0].toUpperCase())}</div>
+                                    <div>
+                                        <h4 class="font-bold">${escapeHtml(msg.name)}</h4>
+                                        <p class="text-gray-400 text-xs">${msg.date}</p>
+                                    </div>
+                                </div>
+                                <div class="message-actions">
+                                    ${actionsHtml}
+                                </div>
+                            </div>
+                            <p class="text-gray-300 mt-2">${escapeHtml(msg.message)}</p>
+                        `;
+                        msgContainer.appendChild(div);
+                    });
+                    // 绑定点赞按钮
+                    document.querySelectorAll('.like-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const id = parseInt(btn.getAttribute('data-id'));
+                            let msgs = JSON.parse(localStorage.getItem('music_messages') || '[]');
+                            const msgIndex = msgs.findIndex(m => m.id === id);
+                            if (msgIndex !== -1) {
+                                if (!msgs[msgIndex].likes) msgs[msgIndex].likes = [];
+                                if (!msgs[msgIndex].likes.includes(visitorId)) {
+                                    msgs[msgIndex].likes.push(visitorId);
+                                    localStorage.setItem('music_messages', JSON.stringify(msgs));
+                                    loadMessages();
+                                } else {
+                                    alert('你已经点过赞了');
+                                }
+                            }
+                        });
+                    });
+                    // 绑定普通用户删除按钮
+                    document.querySelectorAll('.delete-msg-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const id = parseInt(btn.getAttribute('data-id'));
+                            if (confirm('确定要删除这条留言吗？')) {
+                                let msgs = JSON.parse(localStorage.getItem('music_messages') || '[]');
+                                msgs = msgs.filter(m => m.id !== id);
+                                localStorage.setItem('music_messages', JSON.stringify(msgs));
+                                loadMessages();
+                                alert('留言已删除');
+                            }
+                        });
+                    });
+                    // 绑定管理员删除按钮
+                    document.querySelectorAll('.admin-delete-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const id = parseInt(btn.getAttribute('data-id'));
+                            if (confirm('管理员确认删除此留言？')) {
+                                let msgs = JSON.parse(localStorage.getItem('music_messages') || '[]');
+                                msgs = msgs.filter(m => m.id !== id);
+                                localStorage.setItem('music_messages', JSON.stringify(msgs));
+                                loadMessages();
+                                alert('留言已删除');
+                            }
+                        });
+                    });
+                }
+            }
+
+            function saveMessage(name, message) {
+                const msgs = JSON.parse(localStorage.getItem('music_messages') || '[]');
+                const newMsg = {
+                    id: Date.now(),
+                    name: name,
+                    message: message,
+                    date: new Date().toISOString().slice(0,10),
+                    visitorId: visitorId,
+                    likes: []
+                };
+                msgs.unshift(newMsg);
+                localStorage.setItem('music_messages', JSON.stringify(msgs));
+                loadMessages();
+            }
+
+            function escapeHtml(str) {
+                return str.replace(/[&<>]/g, function(m) {
+                    if (m === '&') return '&amp;';
+                    if (m === '<') return '&lt;';
+                    if (m === '>') return '&gt;';
+                    return m;
+                });
+            }
+
+            if (form) {
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const name = document.getElementById('name').value.trim();
+                    const msg = document.getElementById('message').value.trim();
+                    if (!name || !msg) return alert('请填写姓名和留言');
+                    saveMessage(name, msg);
+                    form.reset();
+                    alert('留言已保存 ❤️');
+                });
+            }
+            loadMessages();
+
+            // 管理员按钮交互
+            if (adminFooterBtn) {
+                adminFooterBtn.addEventListener('click', () => {
+                    if (isAdminMode) {
+                        isAdminMode = false;
+                        adminFooterBtn.textContent = '管理员';
+                        loadMessages();
+                    } else {
+                        const pwd = prompt('请输入管理员密码：');
+                        if (pwd === ADMIN_PASSWORD) {
+                            isAdminMode = true;
+                            adminFooterBtn.textContent = '管理员模式';
+                            loadMessages();
+                        } else {
+                            alert('密码错误');
+                        }
+                    }
+                });
+            }
+
+            // ========== 手机端提示栏关闭功能 ==========
+            const banner = document.getElementById('mobileBanner');
+            const closeBannerBtn = document.getElementById('closeBanner');
+            if (banner && closeBannerBtn) {
+                const bannerClosed = localStorage.getItem('mobileBannerClosed');
+                if (bannerClosed === 'true') {
+                    banner.style.display = 'none';
+                }
+                closeBannerBtn.addEventListener('click', () => {
+                    banner.style.display = 'none';
+                    localStorage.setItem('mobileBannerClosed', 'true');
+                });
+            }
+
+            // ========== 导航栏滚动、移动菜单、专辑滚动 ==========
+            const navbar = document.getElementById('navbar');
+            window.addEventListener('scroll', () => { if (window.scrollY > 50) navbar.classList.add('bg-glass'); else navbar.classList.remove('bg-glass'); });
+            const toggleBtnMenu = document.getElementById('menu-toggle');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (toggleBtnMenu && mobileMenu) { toggleBtnMenu.addEventListener('click', () => { mobileMenu.classList.toggle('hidden'); toggleBtnMenu.innerHTML = mobileMenu.classList.contains('hidden') ? '<i class="fa fa-bars"></i>' : '<i class="fa fa-times"></i>'; }); }
+            const albumsContainer = document.getElementById('albums-container');
+            const albumsPrev = document.getElementById('albums-prev');
+            const albumsNext = document.getElementById('albums-next');
+            if (albumsPrev && albumsNext && albumsContainer) { albumsPrev.addEventListener('click', () => albumsContainer.scrollBy({ left: -300, behavior: 'smooth' })); albumsNext.addEventListener('click', () => albumsContainer.scrollBy({ left: 300, behavior: 'smooth' })); }
+
+            // GSAP 动画
+            if (typeof gsap !== 'undefined' && typeof SplitText !== 'undefined') {
+                const heading = document.getElementById('heading');
+                if (heading) {
+                    const split = new SplitText(heading, { type: 'chars' });
+                    gsap.from(split.chars, { y: 30, autoAlpha: 0, stagger: 0.03, duration: 0.6 });
+                }
+            }
+
+            // 平滑滚动
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function(e) {
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        e.preventDefault();
+                        if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                            mobileMenu.classList.add('hidden');
+                            if (toggleBtnMenu) toggleBtnMenu.innerHTML = '<i class="fa fa-bars"></i>';
+                        }
+                        window.scrollTo({ top: target.offsetTop - 70, behavior: 'smooth' });
+                    }
+                });
+            });
+
+            // 宝箱交互
+            const chest = document.getElementById('treasureChest');
+            let closeTimeout = null;
+            function createHeart(x, y) {
+                const heart = document.createElement('div');
+                heart.className = 'heart';
+                heart.innerHTML = '❤️';
+                heart.style.position = 'fixed';
+                heart.style.left = x + 'px';
+                heart.style.top = y + 'px';
+                document.body.appendChild(heart);
+                setTimeout(() => heart.remove(), 1000);
+            }
+            chest.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (chest.classList.contains('open')) {
+                    chest.classList.remove('open');
+                    if (closeTimeout) clearTimeout(closeTimeout);
+                } else {
+                    chest.classList.add('open');
+                    if (closeTimeout) clearTimeout(closeTimeout);
+                    closeTimeout = setTimeout(() => chest.classList.remove('open'), 3000);
+                    const dog = chest.querySelector('.dog');
+                    if (dog) {
+                        const rect = dog.getBoundingClientRect();
+                        createHeart(rect.left + rect.width / 2, rect.top);
+                    }
+                }
+            });
+
+            // 热门单曲自定义播放器初始化
+            const playersMap = new Map();
+            function initCustomPlayer(playerContainer) {
+                const audioUrl = playerContainer.getAttribute('data-song-url');
+                if (!audioUrl) return;
+                const audio = new Audio(audioUrl);
+                audio.preload = 'metadata';
+                const playPauseBtn = playerContainer.querySelector('.play-pause-btn');
+                const stopBtn = playerContainer.querySelector('.stop-btn');
+                const progressFill = playerContainer.querySelector('.progress-fill');
+                const progressContainer = playerContainer.querySelector('.progress-container');
+                const timeSpan = playerContainer.querySelector('.time-text');
+
+                function updateProgress() {
+                    if (audio.duration && !isNaN(audio.duration)) {
+                        const percent = (audio.currentTime / audio.duration) * 100;
+                        progressFill.style.width = `${percent}%`;
+                        const currentMin = Math.floor(audio.currentTime / 60);
+                        const currentSec = Math.floor(audio.currentTime % 60);
+                        const totalMin = Math.floor(audio.duration / 60);
+                        const totalSec = Math.floor(audio.duration % 60);
+                        timeSpan.textContent = `${currentMin}:${currentSec.toString().padStart(2,'0')} / ${totalMin}:${totalSec.toString().padStart(2,'0')}`;
+                    }
+                }
+                audio.addEventListener('timeupdate', updateProgress);
+                audio.addEventListener('loadedmetadata', updateProgress);
+                audio.addEventListener('ended', () => {
+                    playPauseBtn.innerHTML = '<i class="fa fa-play"></i>';
+                });
+                playPauseBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    playersMap.forEach((otherAudio, otherContainer) => {
+                        if (otherContainer !== playerContainer && !otherAudio.paused) {
+                            otherAudio.pause();
+                            const otherPlayBtn = otherContainer.querySelector('.play-pause-btn');
+                            if (otherPlayBtn) otherPlayBtn.innerHTML = '<i class="fa fa-play"></i>';
+                        }
+                    });
+                    if (audio.paused) {
+                        audio.play().catch(err => console.warn('播放失败:', err));
+                        playPauseBtn.innerHTML = '<i class="fa fa-pause"></i>';
+                    } else {
+                        audio.pause();
+                        playPauseBtn.innerHTML = '<i class="fa fa-play"></i>';
+                    }
+                });
+                stopBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    audio.pause();
+                    audio.currentTime = 0;
+                    playPauseBtn.innerHTML = '<i class="fa fa-play"></i>';
+                    updateProgress();
+                });
+                progressContainer.addEventListener('click', (e) => {
+                    const rect = progressContainer.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const width = rect.width;
+                    const percent = clickX / width;
+                    if (audio.duration) {
+                        audio.currentTime = percent * audio.duration;
+                        updateProgress();
+                    }
+                });
+                playersMap.set(playerContainer, audio);
+            }
+            function initPlayersInPanel(panel) {
+                const players = panel.querySelectorAll('.custom-player');
+                players.forEach(player => {
+                    if (!playersMap.has(player)) initCustomPlayer(player);
+                });
+            }
+            const detailToggleBtns = document.querySelectorAll('.detail-toggle-btn');
+            detailToggleBtns.forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const targetId = this.getAttribute('data-target');
+                    const panel = document.getElementById(targetId);
+                    if (panel) {
+                        const hidden = panel.classList.contains('hidden');
+                        if (hidden) {
+                            panel.classList.remove('hidden');
+                            this.innerHTML = '<i class="fa fa-book-open"></i>';
+                            initPlayersInPanel(panel);
+                        } else {
+                            panel.classList.add('hidden');
+                            this.innerHTML = '<i class="fa fa-book"></i>';
+                            const playersInPanel = panel.querySelectorAll('.custom-player');
+                            playersInPanel.forEach(player => {
+                                const audio = playersMap.get(player);
+                                if (audio && !audio.paused) {
+                                    audio.pause();
+                                    const playBtn = player.querySelector('.play-pause-btn');
+                                    if (playBtn) playBtn.innerHTML = '<i class="fa fa-play"></i>';
+                                }
+                            });
+                        }
+                    }
+                });
+            });
+
+            console.log('完整版已加载：所有功能正常，手机端提示栏已添加');
+        })();
+    </script>
+</body>
+</html>
